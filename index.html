@@ -116,7 +116,7 @@
                 </div>
             </div>
             <p class="text-sm text-spotify-muted mb-4">
-                Your key is stored securely in your browser's <code class="text-spotify-green bg-black/40 px-1 py-0.5 rounded">localStorage</code>. It is never transmitted externally.
+                Your key is stored securely in your browser's <code class="text-spotify-green bg-black/40 px-1 py-0.5 rounded">localStorage</code>[cite: 8]. It is never transmitted externally[cite: 8].
             </p>
             <div class="mb-5">
                 <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-2">YouTube Data API v3 Key</label>
@@ -163,12 +163,21 @@
 
     <!-- Playlist Create Modal -->
     <div id="playlist-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden">
-        <div class="bg-spotify-lightdark border border-neutral-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
+        <div class="bg-spotify-lightdark border border-neutral-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
             <h3 class="text-lg font-bold mb-3">Create New Playlist</h3>
-            <input type="text" id="new-playlist-name" placeholder="Playlist Name" class="w-full bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white mb-4">
+            <div class="space-y-3 mb-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-1">Playlist Name</label>
+                    <input type="text" id="new-playlist-name" placeholder="My Playlist" class="w-full bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-1">YouTube Playlist URL <span class="text-spotify-muted/70 lowercase font-normal">(optional)</span></label>
+                    <input type="text" id="new-playlist-url" placeholder="https://www.youtube.com/playlist?list=..." class="w-full bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white">
+                </div>
+            </div>
             <div class="flex justify-end space-x-2">
                 <button onclick="togglePlaylistModal(false)" class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm">Cancel</button>
-                <button onclick="createNewPlaylist()" class="px-4 py-2 bg-spotify-green text-black font-semibold rounded-lg text-sm">Create</button>
+                <button onclick="createNewPlaylist()" id="create-playlist-btn" class="px-4 py-2 bg-spotify-green text-black font-semibold rounded-lg text-sm">Create</button>
             </div>
         </div>
     </div>
@@ -794,6 +803,60 @@
             return (match && match[2].length === 11) ? match[2] : null;
         }
 
+        function extractYouTubePlaylistId(url) {
+            try {
+                const urlObj = new URL(url.startsWith('http') ? url : 'https://' + url);
+                return urlObj.searchParams.get('list');
+            } catch (e) {
+                const regExp = /[?&]list=([^#&?]+)/;
+                const match = url.match(regExp);
+                return match ? match[1] : null;
+            }
+        }
+
+        async function fetchYouTubePlaylistTracks(playlistId) {
+            if (!appData.apiKey) {
+                throw new Error("YouTube API Key is required to import playlists.");
+            }
+            let songs = [];
+            let nextPageToken = '';
+            
+            do {
+                let url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${appData.apiKey}`;
+                if (nextPageToken) {
+                    url += `&pageToken=${nextPageToken}`;
+                }
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.error) {
+                    throw new Error(data.error.message);
+                }
+                if (data.items) {
+                    data.items.forEach(item => {
+                        const snippet = item.snippet;
+                        if (snippet && snippet.resourceId && snippet.resourceId.videoId) {
+                            const vId = snippet.resourceId.videoId;
+                            const title = snippet.title;
+                            const thumb = snippet.thumbnails?.medium?.url || snippet.thumbnails?.default?.url || '';
+                            if (title !== 'Private video' && title !== 'Deleted video') {
+                                songs.push({
+                                    id: vId,
+                                    platform: 'youtube',
+                                    url: `https://www.youtube.com/watch?v=${vId}`,
+                                    title: title,
+                                    thumbnail: thumb,
+                                    isLiked: false
+                                });
+                            }
+                        }
+                    });
+                }
+                nextPageToken = data.nextPageToken || '';
+            } while (nextPageToken && songs.length < 200);
+
+            return songs;
+        }
+
         async function fetchYouTubeMetadata(videoId) {
             let title = `YouTube Track (${videoId})`;
             let thumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
@@ -841,24 +904,67 @@
             const modal = document.getElementById('playlist-modal');
             if (show) {
                 document.getElementById('new-playlist-name').value = '';
+                document.getElementById('new-playlist-url').value = '';
                 modal.classList.remove('hidden');
             } else {
                 modal.classList.add('hidden');
             }
         }
 
-        function createNewPlaylist() {
-            const name = document.getElementById('new-playlist-name').value.trim();
-            if (!name) {
-                showToast("Please enter a playlist name", "error");
+        async function createNewPlaylist() {
+            const nameInput = document.getElementById('new-playlist-name').value.trim();
+            const urlInput = document.getElementById('new-playlist-url').value.trim();
+            const createBtn = document.getElementById('create-playlist-btn');
+
+            if (!nameInput && !urlInput) {
+                showToast("Please enter a playlist name or YouTube URL", "error");
                 return;
             }
+
+            let playlistName = nameInput;
+            let songs = [];
+
+            if (urlInput) {
+                const ytPlaylistId = extractYouTubePlaylistId(urlInput);
+                if (!ytPlaylistId) {
+                    showToast("Invalid YouTube playlist URL", "error");
+                    return;
+                }
+                if (!appData.apiKey) {
+                    showToast("YouTube API Key is required to import playlists", "error");
+                    togglePlaylistModal(false);
+                    openApiKeyModal(true);
+                    return;
+                }
+
+                createBtn.disabled = true;
+                createBtn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> Importing...`;
+
+                try {
+                    songs = await fetchYouTubePlaylistTracks(ytPlaylistId);
+                    if (!playlistName) {
+                        playlistName = `YouTube Playlist (${ytPlaylistId.substring(0, 6)})`;
+                    }
+                } catch (err) {
+                    showToast(err.message || "Failed to import YouTube playlist", "error");
+                    createBtn.disabled = false;
+                    createBtn.innerHTML = "Create";
+                    return;
+                }
+                createBtn.disabled = false;
+                createBtn.innerHTML = "Create";
+            }
+
+            if (!playlistName) {
+                playlistName = "New Playlist";
+            }
+
             const newId = 'pl_' + Date.now();
-            appData.playlists.push({ id: newId, name: name, isSystem: false, songs: [] });
+            appData.playlists.push({ id: newId, name: playlistName, isSystem: false, songs: songs });
             saveToLocalStorage();
             renderSidebar();
             togglePlaylistModal(false);
-            showToast("Playlist created!");
+            showToast(songs.length > 0 ? `Playlist created & ${songs.length} tracks imported!` : "Playlist created!");
             switchView('playlist', newId);
         }
 
