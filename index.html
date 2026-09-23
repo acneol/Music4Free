@@ -129,7 +129,7 @@
             </div>
             <div class="flex space-x-2 mb-4 shrink-0">
                 <input type="text" id="song-search-input" placeholder="Search songs or paste YouTube URL..." class="flex-1 bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white" onkeydown="if(event.key==='Enter') searchYouTubeSongs()">
-                <button onclick="searchYouTubeSongs()" class="bg-spotify-green hover:bg-emerald-400 text-black px-5 rounded-lg font-semibold text-sm transition shrink-0">Search</button>
+                <button onclick="searchYouTubeSongs()" class="bg-spotify-green hover:bg-purple-500 text-black px-5 rounded-lg font-semibold text-sm transition shrink-0">Search</button>
             </div>
             <div class="mb-4 shrink-0">
                 <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-2">Target Playlist</label>
@@ -441,17 +441,22 @@
                             <p class="text-xs text-spotify-muted">${getLikedSongsCount()} saved tracks</p>
                         </div>
                     </div>
-                    ${appData.playlists.filter(p => !p.isSystem).map(pl => `
+                    ${appData.playlists.filter(p => !p.isSystem).map(pl => {
+                        const firstSong = pl.songs && pl.songs.length > 0 ? pl.songs[0] : null;
+                        const coverContent = firstSong && firstSong.thumbnail ?
+                            `<img src="${firstSong.thumbnail}" class="w-full h-full object-cover">` :
+                            `<i class="fa-solid fa-list-music"></i>`;
+                        return `
                         <div onclick="switchView('playlist', '${pl.id}')" class="bg-neutral-800/40 hover:bg-neutral-800 border border-neutral-800 rounded-xl p-3 flex items-center space-x-4 cursor-pointer transition group">
-                            <div class="w-12 h-12 rounded-lg bg-neutral-700 flex items-center justify-center text-spotify-green text-xl shadow-md group-hover:scale-105 transition">
-                                <i class="fa-solid fa-list-music"></i>
+                            <div class="w-12 h-12 rounded-lg bg-neutral-700 flex items-center justify-center text-spotify-green text-xl shadow-md overflow-hidden group-hover:scale-105 transition">
+                                ${coverContent}
                             </div>
                             <div class="overflow-hidden">
                                 <h3 class="font-bold text-sm truncate">${escapeHtml(pl.name)}</h3>
                                 <p class="text-xs text-spotify-muted">${pl.songs.length} tracks</p>
                             </div>
                         </div>
-                    `).join('')}
+                    `;}).join('')}
                 </div>
 
                 <h2 class="text-lg font-bold mb-4">Recently Added Tracks</h2>
@@ -491,14 +496,25 @@
 
             if (!playlist) return switchView('home');
 
+            const firstSong = playlist.songs && playlist.songs.length > 0 ? playlist.songs[0] : null;
+            const headerCover = playlist.isSystem ? 
+                `<div class="w-32 h-32 rounded-lg bg-gradient-to-br from-indigo-500 to-rose-500 flex items-center justify-center text-white text-4xl shadow-2xl shrink-0"><i class="fa-solid fa-heart"></i></div>` :
+                (firstSong && firstSong.thumbnail ? 
+                    `<img src="${firstSong.thumbnail}" class="w-32 h-32 rounded-lg object-cover shadow-2xl shrink-0" onerror="this.src='https://placehold.co/128x128/282828/ffffff?text=♪'">` :
+                    `<div class="w-32 h-32 rounded-lg bg-neutral-800 flex items-center justify-center text-spotify-green text-4xl shadow-2xl shrink-0"><i class="fa-solid fa-list-music"></i></div>`
+                );
+
             main.innerHTML = `
-                <div class="flex justify-between items-end mb-6 bg-gradient-to-t from-black/20 to-transparent p-6 rounded-xl">
-                    <div>
-                        <span class="text-xs font-semibold uppercase tracking-wider text-spotify-muted">Playlist</span>
-                        <h1 class="text-3xl font-extrabold mt-1">${escapeHtml(playlist.name)}</h1>
-                        <p class="text-xs text-spotify-muted mt-2">${playlist.songs.length} songs ${!playlist.isSystem ? '<span class="ml-2 text-spotify-green">• Drag rows up/down to reorder</span>' : ''}</p>
+                <div class="flex items-end justify-between mb-6 bg-gradient-to-t from-black/20 to-transparent p-6 rounded-xl gap-6">
+                    <div class="flex items-center space-x-6">
+                        ${headerCover}
+                        <div>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-spotify-muted">Playlist</span>
+                            <h1 class="text-3xl font-extrabold mt-1">${escapeHtml(playlist.name)}</h1>
+                            <p class="text-xs text-spotify-muted mt-2">${playlist.songs.length} songs ${!playlist.isSystem ? '<span class="ml-2 text-spotify-green">• Drag rows up/down to reorder</span>' : ''}</p>
+                        </div>
                     </div>
-                    <div class="flex space-x-3">
+                    <div class="flex space-x-3 shrink-0">
                         ${playlist.songs.length > 0 ? `
                             <button onclick="playPlaylistQueue('${playlist.id}', 0)" class="bg-spotify-green hover:bg-purple-500 text-black font-bold px-6 py-3 rounded-full text-sm flex items-center space-x-2 transition shadow-xl">
                                 <i class="fa-solid fa-play"></i>
@@ -639,7 +655,7 @@
                 select.innerHTML = `<option value="${newId}">My Playlist</option>`;
             }
             document.getElementById('song-search-input').value = '';
-            document.getElementById('search-results-container').innerHTML = `<div class="text-center py-12 text-spotify-muted text-xs">Type a song name above or paste a YouTube URL to search and add tracks.</div>`;
+            document.getElementById('search-results-container').innerHTML = `<div class="text-center py-12 text-spotify-muted text-xs">Type a song name above or paste a video URL to search and add tracks.</div>`;
             document.getElementById('add-song-modal').classList.remove('hidden');
         }
 
@@ -671,7 +687,7 @@
                                     <p class="text-xs text-spotify-muted">Direct YouTube Link</p>
                                 </div>
                             </div>
-                            <button onclick='addSongToTargetPlaylist(${JSON.stringify(songData).replace(/'/g, "&#39;")})' class="bg-spotify-green hover:bg-emerald-400 text-black px-4 py-2 rounded-lg text-xs font-semibold shrink-0 transition">Add to Playlist</button>
+                            <button onclick='addSongToTargetPlaylist(${JSON.stringify(songData).replace(/'/g, "&#39;")})' class="bg-spotify-green hover:bg-purple-500 text-black px-4 py-2 rounded-lg text-xs font-semibold shrink-0 transition">Add to Playlist</button>
                         </div>
                     `;
                 } catch (e) {
