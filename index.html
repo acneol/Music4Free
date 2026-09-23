@@ -2,13 +2,12 @@
 <html lang="en" class="h-full">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#121212">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Music4Free">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#121212">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Music4Free">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Music4Free - Private Music Streamer</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -88,6 +87,23 @@
 </head>
 <body class="bg-spotify-dark text-white h-full font-sans overflow-hidden flex flex-col select-none">
 
+    <!-- Mobile Header Bar (Visible on mobile only) -->
+    <div class="md:hidden bg-spotify-lightdark px-4 py-3 flex items-center justify-between border-b border-neutral-800 shrink-0 z-30">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 rounded-full bg-spotify-green flex items-center justify-center text-black font-bold text-lg">
+                <i class="fa-solid fa-headphones"></i>
+            </div>
+            <span class="font-bold text-lg tracking-tight">Music4Free</span>
+        </div>
+        <button onclick="toggleMobileSidebar(true)" class="text-spotify-muted hover:text-white text-xl p-1.5 focus:outline-none">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+    </div>
+
+    <!-- Mobile Sidebar Backdrop -->
+    <div id="sidebar-backdrop" onclick="toggleMobileSidebar(false)" class="fixed inset-0 bg-black/70 z-40 md:hidden hidden backdrop-blur-sm transition-opacity"></div>
+
+    <!-- API Key Modal -->
     <div id="api-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden">
         <div class="bg-spotify-lightdark border border-neutral-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
             <div class="flex items-center space-x-3 mb-4">
@@ -116,11 +132,13 @@
         </div>
     </div>
 
-    <div id="toast" class="fixed bottom-24 right-6 bg-neutral-900 border border-neutral-700 text-white px-5 py-3 rounded-xl shadow-2xl z-50 transform translate-y-20 opacity-0 transition-all duration-300 flex items-center space-x-3 max-w-md">
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-24 right-4 sm:right-6 bg-neutral-900 border border-neutral-700 text-white px-4 sm:px-5 py-3 rounded-xl shadow-2xl z-50 transform translate-y-20 opacity-0 transition-all duration-300 flex items-center space-x-3 max-w-sm sm:max-w-md">
         <i id="toast-icon" class="fa-solid fa-circle-check text-spotify-green shrink-0"></i>
         <span id="toast-msg" class="text-xs font-medium leading-relaxed">Notification message</span>
     </div>
 
+    <!-- Add Song Modal -->
     <div id="add-song-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden">
         <div class="bg-spotify-lightdark border border-neutral-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl flex flex-col max-h-[85vh]">
             <div class="flex justify-between items-center mb-4 shrink-0">
@@ -129,7 +147,7 @@
             </div>
             <div class="flex space-x-2 mb-4 shrink-0">
                 <input type="text" id="song-search-input" placeholder="Search songs or paste YouTube URL..." class="flex-1 bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white" onkeydown="if(event.key==='Enter') searchYouTubeSongs()">
-                <button onclick="searchYouTubeSongs()" class="bg-spotify-green hover:bg-purple-500 text-black px-5 rounded-lg font-semibold text-sm transition shrink-0">Search</button>
+                <button onclick="searchYouTubeSongs()" class="bg-spotify-green hover:bg-purple-500 text-black px-4 sm:px-5 rounded-lg font-semibold text-sm transition shrink-0">Search</button>
             </div>
             <div class="mb-4 shrink-0">
                 <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-2">Target Playlist</label>
@@ -143,6 +161,7 @@
         </div>
     </div>
 
+    <!-- Playlist Create Modal -->
     <div id="playlist-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden">
         <div class="bg-spotify-lightdark border border-neutral-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl">
             <h3 class="text-lg font-bold mb-3">Create New Playlist</h3>
@@ -154,13 +173,20 @@
         </div>
     </div>
 
-    <div class="flex flex-1 overflow-hidden p-2 gap-2">
-        <aside class="w-64 bg-spotify-lightdark rounded-xl flex flex-col p-4 space-y-4 shrink-0">
-            <div class="flex items-center space-x-3 px-2 py-1">
-                <div class="w-8 h-8 rounded-full bg-spotify-green flex items-center justify-center text-black font-bold text-lg">
-                    <i class="fa-solid fa-headphones"></i>
+    <!-- Main App Body -->
+    <div class="flex flex-1 overflow-hidden p-2 gap-2 relative">
+        <!-- Responsive Sidebar / Drawer -->
+        <aside id="app-sidebar" class="fixed inset-y-0 left-0 z-50 w-72 bg-spotify-lightdark transform -translate-x-full md:translate-x-0 md:static md:w-64 transition-transform duration-300 flex flex-col p-4 space-y-4 shrink-0 shadow-2xl md:shadow-none">
+            <div class="flex items-center justify-between px-2 py-1">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-spotify-green flex items-center justify-center text-black font-bold text-lg">
+                        <i class="fa-solid fa-headphones"></i>
+                    </div>
+                    <span class="font-bold text-lg tracking-tight">Music4Free</span>
                 </div>
-                <span class="font-bold text-lg tracking-tight">Music4Free</span>
+                <button onclick="toggleMobileSidebar(false)" class="md:hidden text-spotify-muted hover:text-white text-lg p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
 
             <nav class="space-y-1">
@@ -202,54 +228,58 @@
             </div>
         </aside>
 
-        <main id="main-content-area" class="flex-1 bg-gradient-to-b from-[#1f1f1f] to-spotify-dark rounded-xl overflow-y-auto p-6 relative flex flex-col">
+        <!-- Main Content Area -->
+        <main id="main-content-area" class="flex-1 bg-gradient-to-b from-[#1f1f1f] to-spotify-dark rounded-xl overflow-y-auto p-4 sm:p-6 relative flex flex-col">
             <!-- Dynamic view rendered here -->
         </main>
     </div>
 
-    <footer class="h-20 bg-black px-4 flex items-center justify-between border-t border-neutral-900 shrink-0 z-30">
-        <div class="flex items-center space-x-3 w-1/4">
-            <div id="player-thumb-container" class="w-14 h-14 bg-neutral-800 rounded-md overflow-hidden shrink-0 flex items-center justify-center relative">
-                <i class="fa-solid fa-music text-neutral-600 text-xl" id="player-default-icon"></i>
-                <img id="player-thumb" src="" alt="" class="w-full h-full object-cover hidden">
+    <!-- Responsive Footer / Player Bar -->
+    <footer class="bg-black px-3 sm:px-4 py-3 sm:py-0 h-auto sm:h-20 flex flex-col sm:flex-row items-center justify-between border-t border-neutral-900 shrink-0 z-30 gap-3 sm:gap-0">
+        <div class="flex items-center space-x-3 w-full sm:w-1/4 justify-between sm:justify-start">
+            <div class="flex items-center space-x-3 overflow-hidden">
+                <div id="player-thumb-container" class="w-12 h-12 sm:w-14 sm:h-14 bg-neutral-800 rounded-md overflow-hidden shrink-0 flex items-center justify-center relative">
+                    <i class="fa-solid fa-music text-neutral-600 text-xl" id="player-default-icon"></i>
+                    <img id="player-thumb" src="" alt="" class="w-full h-full object-cover hidden">
+                </div>
+                <div class="overflow-hidden">
+                    <h4 id="player-title" class="text-xs sm:text-sm font-semibold truncate text-white">No song selected</h4>
+                    <p id="player-platform" class="text-[10px] sm:text-xs text-spotify-muted truncate capitalize">YouTube Audio Stream</p>
+                </div>
             </div>
-            <div class="overflow-hidden">
-                <h4 id="player-title" class="text-sm font-semibold truncate text-white">No song selected</h4>
-                <p id="player-platform" class="text-xs text-spotify-muted truncate capitalize">YouTube Audio Stream</p>
+            <!-- Dynamic Soundwave & Like controls for mobile layout -->
+            <div class="flex items-center space-x-2 shrink-0">
+                <div id="footer-soundwave" class="hidden items-end space-x-0.5 h-5 ml-1 shrink-0 paused-animation">
+                    <div class="soundwave-bar"></div>
+                    <div class="soundwave-bar"></div>
+                    <div class="soundwave-bar"></div>
+                </div>
+                <button onclick="toggleLikeCurrent()" id="player-like-btn" class="text-spotify-muted hover:text-white text-lg ml-1 hidden">
+                    <i class="fa-regular fa-heart" id="player-like-icon"></i>
+                </button>
             </div>
-            <!-- Dynamic Soundwave Animation Container -->
-            <div id="footer-soundwave" class="hidden items-end space-x-0.5 h-5 ml-2 shrink-0 paused-animation">
-                <div class="soundwave-bar"></div>
-                <div class="soundwave-bar"></div>
-                <div class="soundwave-bar"></div>
-                <div class="soundwave-bar"></div>
-                <div class="soundwave-bar"></div>
-            </div>
-            <button onclick="toggleLikeCurrent()" id="player-like-btn" class="text-spotify-muted hover:text-white text-lg ml-2 hidden">
-                <i class="fa-regular fa-heart" id="player-like-icon"></i>
-            </button>
         </div>
 
-        <div class="flex flex-col items-center max-w-xl w-2/4 space-y-1">
-            <div class="flex items-center space-x-6">
-                <button onclick="toggleShuffle()" id="shuffle-btn" class="text-spotify-muted hover:text-white text-sm transition" title="Shuffle"><i class="fa-solid fa-shuffle"></i></button>
-                <button onclick="playPrev()" class="text-spotify-muted hover:text-white text-base transition" title="Previous"><i class="fa-solid fa-backward-step"></i></button>
-                <button onclick="togglePlayPause()" id="play-pause-btn" class="w-9 h-9 rounded-full bg-white hover:scale-105 text-black flex items-center justify-center transition shadow-md">
-                    <i class="fa-solid fa-play text-sm ml-0.5" id="play-pause-icon"></i>
+        <div class="flex flex-col items-center w-full sm:w-2/4 space-y-1 max-w-xl">
+            <div class="flex items-center space-x-5 sm:space-x-6">
+                <button onclick="toggleShuffle()" id="shuffle-btn" class="text-spotify-muted hover:text-white text-xs sm:text-sm transition" title="Shuffle"><i class="fa-solid fa-shuffle"></i></button>
+                <button onclick="playPrev()" class="text-spotify-muted hover:text-white text-sm sm:text-base transition" title="Previous"><i class="fa-solid fa-backward-step"></i></button>
+                <button onclick="togglePlayPause()" id="play-pause-btn" class="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white hover:scale-105 text-black flex items-center justify-center transition shadow-md">
+                    <i class="fa-solid fa-play text-xs sm:text-sm ml-0.5" id="play-pause-icon"></i>
                 </button>
-                <button onclick="playNext()" class="text-spotify-muted hover:text-white text-base transition" title="Next"><i class="fa-solid fa-forward-step"></i></button>
-                <button onclick="toggleRepeat()" id="repeat-btn" class="text-spotify-muted hover:text-white text-sm transition relative" title="Repeat Off"><i class="fa-solid fa-repeat"></i></button>
+                <button onclick="playNext()" class="text-spotify-muted hover:text-white text-sm sm:text-base transition" title="Next"><i class="fa-solid fa-forward-step"></i></button>
+                <button onclick="toggleRepeat()" id="repeat-btn" class="text-spotify-muted hover:text-white text-xs sm:text-sm transition relative" title="Repeat Off"><i class="fa-solid fa-repeat"></i></button>
             </div>
-            <div class="flex items-center space-x-3 w-full text-xs text-spotify-muted">
+            <div class="flex items-center space-x-3 w-full text-[10px] sm:text-xs text-spotify-muted">
                 <span id="current-time">0:00</span>
                 <input type="range" id="progress-bar" value="0" min="0" max="100" class="w-full h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer slider-thumb accent-spotify-green" oninput="seekTrack(this.value)">
                 <span id="duration">0:00</span>
             </div>
         </div>
 
-        <div class="flex items-center justify-end space-x-3 w-1/4">
+        <div class="hidden sm:flex items-center justify-end space-x-3 w-1/4">
             <i class="fa-solid fa-volume-high text-spotify-muted text-sm"></i>
-            <input type="range" min="0" max="100" value="80" class="w-60 h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer slider-thumb accent-spotify-green" onchange="setVolume(this.value)">
+            <input type="range" min="0" max="100" value="80" class="w-24 md:w-36 lg:w-48 h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer slider-thumb accent-spotify-green" onchange="setVolume(this.value)">
         </div>
     </footer>
 
@@ -273,7 +303,7 @@
             originalQueue: [],
             isPlaying: false,
             isShuffle: false,
-            repeatMode: 'off' // 'off', 'all', 'one'
+            repeatMode: 'off'
         };
 
         let ytPlayer = null;
@@ -286,6 +316,18 @@
             renderSidebar();
             switchView('home');
         });
+
+        function toggleMobileSidebar(show) {
+            const sidebar = document.getElementById('app-sidebar');
+            const backdrop = document.getElementById('sidebar-backdrop');
+            if (show) {
+                sidebar.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
 
         function loadFromLocalStorage() {
             const savedKey = localStorage.getItem('spoti_yt_api_key');
@@ -363,6 +405,7 @@
         }
 
         function switchView(viewId, playlistId = null) {
+            toggleMobileSidebar(false);
             if (viewId === 'playlist' && playlistId) {
                 appData.currentPlaylistId = playlistId;
             } else {
@@ -420,24 +463,24 @@
             allSongs.reverse();
 
             main.innerHTML = `
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-3">
                     <div>
-                        <h1 class="text-2xl font-bold tracking-tight">Good day, Music Lover</h1>
+                        <h1 class="text-xl sm:text-2xl font-bold tracking-tight">Good day, Music Lover</h1>
                         <p class="text-xs text-spotify-muted mt-1">Your local private music streaming dashboard</p>
                     </div>
-                    <button onclick="openAddSongModal()" class="bg-spotify-green hover:bg-purple-500 text-black font-semibold px-4 py-2 rounded-full text-sm flex items-center space-x-2 transition shadow-lg">
+                    <button onclick="openAddSongModal()" class="bg-spotify-green hover:bg-purple-500 text-black font-semibold px-4 py-2 rounded-full text-sm flex items-center space-x-2 transition shadow-lg shrink-0">
                         <i class="fa-solid fa-plus"></i>
                         <span>Add Songs</span>
                     </button>
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
                     <div onclick="switchView('favorites')" class="bg-neutral-800/40 hover:bg-neutral-800 border border-neutral-800 rounded-xl p-3 flex items-center space-x-4 cursor-pointer transition group">
-                        <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-500 to-rose-500 flex items-center justify-center text-white text-xl shadow-md group-hover:scale-105 transition">
+                        <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-indigo-500 to-rose-500 flex items-center justify-center text-white text-xl shadow-md group-hover:scale-105 transition shrink-0">
                             <i class="fa-solid fa-heart"></i>
                         </div>
-                        <div>
-                            <h3 class="font-bold text-sm">Liked Songs</h3>
+                        <div class="overflow-hidden">
+                            <h3 class="font-bold text-sm truncate">Liked Songs</h3>
                             <p class="text-xs text-spotify-muted">${getLikedSongsCount()} saved tracks</p>
                         </div>
                     </div>
@@ -448,7 +491,7 @@
                             `<i class="fa-solid fa-list-music"></i>`;
                         return `
                         <div onclick="switchView('playlist', '${pl.id}')" class="bg-neutral-800/40 hover:bg-neutral-800 border border-neutral-800 rounded-xl p-3 flex items-center space-x-4 cursor-pointer transition group">
-                            <div class="w-12 h-12 rounded-lg bg-neutral-700 flex items-center justify-center text-spotify-green text-xl shadow-md overflow-hidden group-hover:scale-105 transition">
+                            <div class="w-12 h-12 rounded-lg bg-neutral-700 flex items-center justify-center text-spotify-green text-xl shadow-md overflow-hidden group-hover:scale-105 transition shrink-0">
                                 ${coverContent}
                             </div>
                             <div class="overflow-hidden">
@@ -498,35 +541,35 @@
 
             const firstSong = playlist.songs && playlist.songs.length > 0 ? playlist.songs[0] : null;
             const headerCover = playlist.isSystem ? 
-                `<div class="w-32 h-32 rounded-lg bg-gradient-to-br from-indigo-500 to-rose-500 flex items-center justify-center text-white text-4xl shadow-2xl shrink-0"><i class="fa-solid fa-heart"></i></div>` :
+                `<div class="w-24 h-24 sm:w-32 sm:h-32 rounded-lg bg-gradient-to-br from-indigo-500 to-rose-500 flex items-center justify-center text-white text-3xl sm:text-4xl shadow-2xl shrink-0"><i class="fa-solid fa-heart"></i></div>` :
                 (firstSong && firstSong.thumbnail ? 
-                    `<img src="${firstSong.thumbnail}" class="w-32 h-32 rounded-lg object-cover shadow-2xl shrink-0" onerror="this.src='https://placehold.co/128x128/282828/ffffff?text=♪'">` :
-                    `<div class="w-32 h-32 rounded-lg bg-neutral-800 flex items-center justify-center text-spotify-green text-4xl shadow-2xl shrink-0"><i class="fa-solid fa-list-music"></i></div>`
+                    `<img src="${firstSong.thumbnail}" class="w-24 h-24 sm:w-32 sm:h-32 rounded-lg object-cover shadow-2xl shrink-0" onerror="this.src='https://placehold.co/128x128/282828/ffffff?text=♪'">` :
+                    `<div class="w-24 h-24 sm:w-32 sm:h-32 rounded-lg bg-neutral-800 flex items-center justify-center text-spotify-green text-3xl sm:text-4xl shadow-2xl shrink-0"><i class="fa-solid fa-list-music"></i></div>`
                 );
 
             main.innerHTML = `
-                <div class="flex items-end justify-between mb-6 bg-gradient-to-t from-black/20 to-transparent p-6 rounded-xl gap-6">
-                    <div class="flex items-center space-x-6">
+                <div class="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-6 bg-gradient-to-t from-black/20 to-transparent p-4 sm:p-6 rounded-xl gap-4">
+                    <div class="flex items-center space-x-4 sm:space-x-6">
                         ${headerCover}
                         <div>
                             <span class="text-xs font-semibold uppercase tracking-wider text-spotify-muted">Playlist</span>
-                            <h1 class="text-3xl font-extrabold mt-1">${escapeHtml(playlist.name)}</h1>
-                            <p class="text-xs text-spotify-muted mt-2">${playlist.songs.length} songs ${!playlist.isSystem ? '<span class="ml-2 text-spotify-green">• Drag rows up/down to reorder</span>' : ''}</p>
+                            <h1 class="text-xl sm:text-3xl font-extrabold mt-1 truncate">${escapeHtml(playlist.name)}</h1>
+                            <p class="text-xs text-spotify-muted mt-1 sm:mt-2">${playlist.songs.length} songs ${!playlist.isSystem ? '<span class="hidden md:inline ml-2 text-spotify-green">• Drag rows up/down to reorder</span>' : ''}</p>
                         </div>
                     </div>
-                    <div class="flex space-x-3 shrink-0">
+                    <div class="flex flex-wrap gap-2 shrink-0 w-full sm:w-auto">
                         ${playlist.songs.length > 0 ? `
-                            <button onclick="playPlaylistQueue('${playlist.id}', 0)" class="bg-spotify-green hover:bg-purple-500 text-black font-bold px-6 py-3 rounded-full text-sm flex items-center space-x-2 transition shadow-xl">
+                            <button onclick="playPlaylistQueue('${playlist.id}', 0)" class="bg-spotify-green hover:bg-purple-500 text-black font-bold px-5 sm:px-6 py-2.5 sm:py-3 rounded-full text-xs sm:text-sm flex items-center space-x-2 transition shadow-xl">
                                 <i class="fa-solid fa-play"></i>
                                 <span>Play All</span>
                             </button>
                         ` : ''}
-                        <button onclick="openAddSongModal()" class="bg-neutral-800 hover:bg-neutral-700 text-white font-semibold px-4 py-3 rounded-full text-sm flex items-center space-x-2 transition">
+                        <button onclick="openAddSongModal()" class="bg-neutral-800 hover:bg-neutral-700 text-white font-semibold px-4 py-2.5 sm:py-3 rounded-full text-xs sm:text-sm flex items-center space-x-2 transition">
                             <i class="fa-solid fa-plus"></i>
                             <span>Add Songs</span>
                         </button>
                         ${!playlist.isSystem ? `
-                            <button onclick="deletePlaylist('${playlist.id}')" class="bg-neutral-800 hover:bg-rose-500 hover:text-white text-spotify-muted px-4 py-3 rounded-full text-sm transition" title="Delete Playlist">
+                            <button onclick="deletePlaylist('${playlist.id}')" class="bg-neutral-800 hover:bg-rose-500 hover:text-white text-spotify-muted px-4 py-2.5 sm:py-3 rounded-full text-xs sm:text-sm transition" title="Delete Playlist">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
                         ` : ''}
@@ -544,10 +587,10 @@
                     </div>
                 ` : `
                     <div class="space-y-1 overflow-y-auto pb-6">
-                        <div class="grid grid-cols-12 text-xs font-semibold text-spotify-muted uppercase px-4 py-2 border-b border-neutral-800">
-                            <div class="col-span-8">Title</div>
-                            <div class="col-span-3">Platform</div>
-                            <div class="col-span-1 text-right"><i class="fa-solid fa-ellipsis"></i></div>
+                        <div class="grid grid-cols-12 text-xs font-semibold text-spotify-muted uppercase px-3 sm:px-4 py-2 border-b border-neutral-800">
+                            <div class="col-span-9 sm:col-span-8">Title</div>
+                            <div class="hidden sm:block sm:col-span-3">Platform</div>
+                            <div class="col-span-3 sm:col-span-1 text-right"><i class="fa-solid fa-ellipsis"></i></div>
                         </div>
                         ${playlist.songs.map((song, idx) => renderSongRow(song, idx, playlist.id)).join('')}
                     </div>
@@ -561,9 +604,9 @@
             const titleColor = isCurrent ? 'text-spotify-green font-bold' : 'text-white font-medium';
 
             return `
-                <div draggable="true" ondragstart="handleDragStart(event, ${idx})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, '${contextId}', ${idx})" ondragenter="handleDragEnter(event)" ondragleave="handleDragLeave(event)" ondragend="handleDragEnd(event)" onclick="playSongFromContext('${contextId}', ${idx})" class="grid grid-cols-12 items-center px-4 py-2.5 rounded-lg ${rowBg} cursor-pointer transition group">
-                    <div class="col-span-8 flex items-center space-x-3 overflow-hidden pr-2">
-                        <i class="fa-solid fa-grip-vertical text-spotify-muted opacity-30 group-hover:opacity-100 text-xs shrink-0 cursor-grab active:cursor-grabbing" title="Drag to reorder"></i>
+                <div draggable="true" ondragstart="handleDragStart(event, ${idx})" ondragover="handleDragOver(event)" ondrop="handleDrop(event, '${contextId}', ${idx})" ondragenter="handleDragEnter(event)" ondragleave="handleDragLeave(event)" ondragend="handleDragEnd(event)" onclick="playSongFromContext('${contextId}', ${idx})" class="grid grid-cols-12 items-center px-3 sm:px-4 py-2.5 rounded-lg ${rowBg} cursor-pointer transition group">
+                    <div class="col-span-9 sm:col-span-8 flex items-center space-x-3 overflow-hidden pr-2">
+                        <i class="fa-solid fa-grip-vertical text-spotify-muted opacity-30 group-hover:opacity-100 text-xs shrink-0 cursor-grab active:cursor-grabbing hidden sm:inline-block" title="Drag to reorder"></i>
                         ${isCurrent ? `
                             <div class="w-5 flex items-end justify-center space-x-0.5 h-4 ${appData.isPlaying ? '' : 'paused-animation'}">
                                 <div class="soundwave-bar !w-[2px] !h-3"></div>
@@ -576,19 +619,19 @@
                         `}
                         <img src="${song.thumbnail || 'https://placehold.co/40x40/282828/ffffff?text=♪'}" class="w-10 h-10 rounded object-cover shrink-0" onerror="this.src='https://placehold.co/40x40/282828/ffffff?text=♪'">
                         <div class="overflow-hidden">
-                            <h4 class="text-sm truncate ${titleColor}">${escapeHtml(song.title)}</h4>
-                            <p class="text-xs text-spotify-muted truncate">YouTube Audio Stream</p>
+                            <h4 class="text-xs sm:text-sm truncate ${titleColor}">${escapeHtml(song.title)}</h4>
+                            <p class="text-[10px] sm:text-xs text-spotify-muted truncate">YouTube Audio Stream</p>
                         </div>
                     </div>
-                    <div class="col-span-3 text-xs text-spotify-muted capitalize">
+                    <div class="hidden sm:block sm:col-span-3 text-xs text-spotify-muted capitalize">
                         <span class="px-2 py-0.5 rounded bg-neutral-800 text-[10px]">YouTube</span>
                     </div>
-                    <div class="col-span-1 flex items-center justify-end space-x-3">
-                        <button onclick="event.stopPropagation(); toggleLikeSong('${song.id}')" class="text-spotify-muted hover:text-rose-500 text-sm transition">
+                    <div class="col-span-3 sm:col-span-1 flex items-center justify-end space-x-2 sm:space-x-3">
+                        <button onclick="event.stopPropagation(); toggleLikeSong('${song.id}')" class="text-spotify-muted hover:text-rose-500 text-xs sm:text-sm transition">
                             <i class="${song.isLiked ? 'fa-solid fa-heart text-rose-500' : 'fa-regular fa-heart'}"></i>
                         </button>
                         ${contextId !== 'home' && contextId !== 'favs' ? `
-                            <button onclick="event.stopPropagation(); removeSongFromPlaylist('${contextId}', '${song.id}')" class="text-spotify-muted hover:text-rose-500 text-sm transition" title="Remove">
+                            <button onclick="event.stopPropagation(); removeSongFromPlaylist('${contextId}', '${song.id}')" class="text-spotify-muted hover:text-rose-500 text-xs sm:text-sm transition" title="Remove">
                                 <i class="fa-solid fa-xmark"></i>
                             </button>
                         ` : ''}
@@ -679,7 +722,7 @@
                 try {
                     const songData = await fetchYouTubeMetadata(videoId);
                     container.innerHTML = `
-                        <div class="flex items-center justify-between p-3 bg-neutral-800/60 rounded-lg">
+                        <div class="flex items-center justify-between p-3 bg-neutral-800/60 rounded-lg gap-3">
                             <div class="flex items-center space-x-3 overflow-hidden pr-2">
                                 <img src="${songData.thumbnail}" class="w-12 h-12 rounded object-cover shrink-0">
                                 <div class="overflow-hidden">
@@ -687,7 +730,7 @@
                                     <p class="text-xs text-spotify-muted">Direct YouTube Link</p>
                                 </div>
                             </div>
-                            <button onclick='addSongToTargetPlaylist(${JSON.stringify(songData).replace(/'/g, "&#39;")})' class="bg-spotify-green hover:bg-purple-500 text-black px-4 py-2 rounded-lg text-xs font-semibold shrink-0 transition">Add to Playlist</button>
+                            <button onclick='addSongToTargetPlaylist(${JSON.stringify(songData).replace(/'/g, "&#39;")})' class="bg-spotify-green hover:bg-purple-500 text-black px-4 py-2 rounded-lg text-xs font-semibold shrink-0 transition">Add</button>
                         </div>
                     `;
                 } catch (e) {
@@ -728,12 +771,12 @@
                         isLiked: false
                     };
                     return `
-                        <div class="flex items-center justify-between p-3 bg-neutral-800/40 hover:bg-neutral-800 rounded-lg transition">
+                        <div class="flex items-center justify-between p-3 bg-neutral-800/40 hover:bg-neutral-800 rounded-lg transition gap-3">
                             <div class="flex items-center space-x-3 overflow-hidden pr-2">
                                 <img src="${thumb}" class="w-12 h-12 rounded object-cover shrink-0" onerror="this.src='https://placehold.co/48x48/282828/ffffff?text=♪'">
                                 <div class="overflow-hidden">
                                     <h4 class="text-sm font-medium truncate">${escapeHtml(title)}</h4>
-                                    <p class="text-xs text-spotify-muted">${escapeHtml(item.snippet.channelTitle)}</p>
+                                    <p class="text-xs text-spotify-muted truncate">${escapeHtml(item.snippet.channelTitle)}</p>
                                 </div>
                             </div>
                             <button onclick='addSongToTargetPlaylist(${JSON.stringify(songObj).replace(/'/g, "&#39;")})' class="bg-spotify-green hover:bg-emerald-400 text-black px-4 py-2 rounded-lg text-xs font-semibold shrink-0 transition">Add</button>
@@ -1031,11 +1074,11 @@
             const soundwave = document.getElementById('footer-soundwave');
             
             if (appData.isPlaying) {
-                icon.className = "fa-solid fa-pause text-sm";
+                icon.className = "fa-solid fa-pause text-xs sm:text-sm";
                 soundwave.classList.remove('hidden', 'paused-animation');
                 soundwave.classList.add('flex');
             } else {
-                icon.className = "fa-solid fa-play text-sm ml-0.5";
+                icon.className = "fa-solid fa-play text-xs sm:text-sm ml-0.5";
                 soundwave.classList.add('paused-animation');
             }
             refreshActiveView();
@@ -1076,11 +1119,11 @@
             appData.isShuffle = !appData.isShuffle;
             const btn = document.getElementById('shuffle-btn');
             if (appData.isShuffle) {
-                btn.className = "text-spotify-green text-sm transition";
+                btn.className = "text-spotify-green text-xs sm:text-sm transition";
                 applyShuffle();
                 showToast("Shuffle Enabled");
             } else {
-                btn.className = "text-spotify-muted hover:text-white text-sm transition";
+                btn.className = "text-spotify-muted hover:text-white text-xs sm:text-sm transition";
                 disableShuffle();
                 showToast("Shuffle Disabled");
             }
@@ -1119,19 +1162,19 @@
             const btn = document.getElementById('repeat-btn');
             if (appData.repeatMode === 'off') {
                 appData.repeatMode = 'all';
-                btn.className = "text-spotify-green text-sm transition relative";
+                btn.className = "text-spotify-green text-xs sm:text-sm transition relative";
                 btn.title = "Repeat All";
                 btn.innerHTML = '<i class="fa-solid fa-repeat"></i>';
                 showToast("Repeat All Enabled");
             } else if (appData.repeatMode === 'all') {
                 appData.repeatMode = 'one';
-                btn.className = "text-spotify-green text-sm transition relative";
+                btn.className = "text-spotify-green text-xs sm:text-sm transition relative";
                 btn.title = "Repeat One";
                 btn.innerHTML = '<i class="fa-solid fa-repeat"></i><span class="absolute -bottom-1 -right-1 text-[9px] font-bold bg-spotify-green text-black rounded-full px-1">1</span>';
                 showToast("Repeat One Enabled");
             } else {
                 appData.repeatMode = 'off';
-                btn.className = "text-spotify-muted hover:text-white text-sm transition relative";
+                btn.className = "text-spotify-muted hover:text-white text-xs sm:text-sm transition relative";
                 btn.title = "Repeat Off";
                 btn.innerHTML = '<i class="fa-solid fa-repeat"></i>';
                 showToast("Repeat Disabled");
