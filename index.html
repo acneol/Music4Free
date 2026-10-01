@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Music4Free">
     <meta charset="UTF-8">
-    <title>Music4Free - Private Music Streamer (Ad-Free)</title>
+    <title>Music4Free - Private Music Streamer</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome for icons -->
@@ -108,35 +108,6 @@
     <!-- Mobile Sidebar Backdrop -->
     <div id="sidebar-backdrop" onclick="toggleMobileSidebar(false)" class="fixed inset-0 bg-black/70 z-40 md:hidden hidden backdrop-blur-sm transition-opacity"></div>
 
-    <!-- API Key Modal -->
-    <div id="api-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden">
-        <div class="bg-spotify-lightdark border border-neutral-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-            <div class="flex items-center space-x-3 mb-4">
-                <div class="w-10 h-10 rounded-full bg-spotify-green/20 flex items-center justify-center text-spotify-green text-xl">
-                    <i class="fa-solid fa-key"></i>
-                </div>
-                <div>
-                    <h3 class="text-xl font-bold">YouTube API Key Required</h3>
-                    <p class="text-xs text-spotify-muted">Needed to search and fetch track metadata.</p>
-                </div>
-            </div>
-            <p class="text-sm text-spotify-muted mb-4">
-                Your key is stored securely in your browser's <code class="text-spotify-green bg-black/40 px-1 py-0.5 rounded">localStorage</code>. It is never transmitted externally.
-            </p>
-            <div class="mb-5">
-                <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-2">YouTube Data API v3 Key</label>
-                <input type="password" id="api-key-input" placeholder="AIzaSy..." class="w-full bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white">
-            </div>
-            <div class="flex space-x-3">
-                <button onclick="saveApiKey()" class="flex-1 bg-spotify-green hover:bg-purple-500 text-black font-semibold py-3 rounded-lg transition text-sm">Save & Continue</button>
-                <button id="skip-api-btn" onclick="closeApiKeyModal()" class="px-4 py-3 bg-neutral-800 hover:bg-neutral-700 text-spotify-muted hover:text-white rounded-lg transition text-sm hidden">Cancel</button>
-            </div>
-            <div class="mt-4 text-center">
-                <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-xs text-spotify-green hover:underline">Get a free YouTube API key here <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>
-            </div>
-        </div>
-    </div>
-
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-24 right-4 sm:right-6 bg-neutral-900 border border-neutral-700 text-white px-4 sm:px-5 py-3 rounded-xl shadow-2xl z-50 transform translate-y-20 opacity-0 transition-all duration-300 flex items-center space-x-3 max-w-sm sm:max-w-md">
         <i id="toast-icon" class="fa-solid fa-circle-check text-spotify-green shrink-0"></i>
@@ -174,8 +145,175 @@
                     <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-1">Playlist Name</label>
                     <input type="text" id="new-playlist-name" placeholder="My Playlist" class="w-full bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white">
                 </div>
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button onclick="togglePlaylistModal(false)" class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm">Cancel</button>
+                <button onclick="createNewPlaylist()" id="create-playlist-btn" class="px-4 py-2 bg-spotify-green text-black font-semibold rounded-lg text-sm">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Playlist Rename Modal -->
+    <div id="rename-playlist-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm hidden">
+        <div class="bg-spotify-lightdark border border-neutral-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <h3 class="text-lg font-bold mb-3">Rename Playlist</h3>
+            <input type="hidden" id="rename-playlist-id">
+            <div class="space-y-3 mb-4">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-1">YouTube Playlist URL <span class="text-spotify-muted/70 lowercase font-normal">(optional)</span></label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-spotify-muted mb-1">New Playlist Name</label>
+                    <input type="text" id="rename-playlist-name" placeholder="Playlist Name" class="w-full bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white" onkeydown="if(event.key==='Enter') saveRenamedPlaylist()">
+                </div>
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button onclick="toggleRenamePlaylistModal(false)" class="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-sm">Cancel</button>
+                <button onclick="saveRenamedPlaylist()" class="px-4 py-2 bg-spotify-green text-black font-semibold rounded-lg text-sm">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Immersive Now Playing Fullscreen View with Synced Subtitles -->
+    <div id="immersive-view" class="fixed inset-0 bg-neutral-950/98 backdrop-blur-2xl z-[60] flex flex-col hidden opacity-0 transition-opacity duration-300">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 shrink-0 border-b border-neutral-900">
+            <div class="flex items-center space-x-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-spotify-muted">Now Playing</span>
+                <span id="immersive-playlist-badge" class="text-xs text-white font-medium bg-neutral-800 px-2.5 py-1 rounded-full">Music4Free</span>
+            </div>
+            <button onclick="toggleImmersiveView(false)" class="text-spotify-muted hover:text-white w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center text-lg transition">
+                <i class="fa-solid fa-chevron-down"></i>
+            </button>
+        </div>
+
+        <!-- Content Body -->
+        <div class="flex-1 flex flex-col lg:flex-row items-center justify-center px-4 sm:px-6 lg:px-16 py-4 overflow-y-auto gap-8 max-w-7xl mx-auto w-full">
+            <!-- Artwork & Metadata Container -->
+            <div class="flex flex-col items-center lg:items-start w-full lg:w-1/2 max-w-md lg:max-w-lg space-y-6 shrink-0">
+                <div class="relative w-56 h-56 sm:w-72 sm:h-72 lg:w-80 lg:h-80 rounded-2xl overflow-hidden shadow-2xl bg-neutral-900 border border-neutral-800 shrink-0 group">
+                    <img id="immersive-thumb" src="" alt="" class="w-full h-full object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent opacity-0 group-hover:opacity-100 transition flex items-end p-4">
+                        <span class="text-xs bg-black/70 text-spotify-green px-2.5 py-1 rounded-md font-medium backdrop-blur-sm">Ad-Free Stream</span>
+                    </div>
+                </div>
+                <div class="w-full flex items-center justify-between">
+                    <div class="overflow-hidden pr-4">
+                        <h2 id="immersive-title" class="text-lg sm:text-xl font-bold text-white truncate">Song Title</h2>
+                        <p id="immersive-channel" class="text-xs sm:text-sm text-spotify-muted truncate mt-1">Ad-Free Stream</p>
+                    </div>
+                    <button onclick="toggleLikeCurrent()" class="text-2xl sm:text-3xl text-spotify-muted hover:text-rose-500 transition shrink-0">
+                        <i id="immersive-like-icon" class="fa-regular fa-heart"></i>
+                    </button>
+                </div>
+
+                <!-- Progress Bar & Controls -->
+                <div class="w-full space-y-4">
+                    <div class="space-y-2 w-full">
+                        <div class="flex items-center space-x-3 w-full text-xs text-spotify-muted">
+                            <span id="immersive-current-time">0:00</span>
+                            <input type="range" id="immersive-progress-bar" value="0" min="0" max="100" class="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer slider-thumb accent-spotify-green" oninput="seekTrack(this.value)">
+                            <span id="immersive-duration">0:00</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between w-full px-2">
+                        <button onclick="toggleShuffle()" id="immersive-shuffle-btn" class="text-spotify-muted hover:text-white text-base sm:text-lg transition" title="Shuffle"><i class="fa-solid fa-shuffle"></i></button>
+                        <button onclick="playPrev()" class="text-spotify-muted hover:text-white text-lg sm:text-xl transition" title="Previous"><i class="fa-solid fa-backward-step"></i></button>
+                        <button onclick="togglePlayPause()" id="immersive-play-pause-btn" class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-spotify-green hover:bg-purple-500 text-black flex items-center justify-center transition shadow-xl scale-100 hover:scale-105">
+                            <i class="fa-solid fa-play text-xl ml-0.5" id="immersive-play-pause-icon"></i>
+                        </button>
+                        <button onclick="playNext()" class="text-spotify-muted hover:text-white text-lg sm:text-xl transition" title="Next"><i class="fa-solid fa-forward-step"></i></button>
+                        <button onclick="toggleRepeat()" id="immersive-repeat-btn" class="text-spotify-muted hover:text-white text-base sm:text-lg transition relative" title="Repeat Off"><i class="fa-solid fa-repeat"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Tabs for Subtitles / Queue -->
+            <div class="flex flex-col w-full lg:w-1/2 max-w-md lg:max-w-lg h-[400px] lg:h-[500px] bg-neutral-900/60 border border-neutral-800/80 rounded-2xl p-4 shadow-xl">
+                <!-- Panel Header / Tab Selectors & Subtitle Offset Controls -->
+                <div class="flex items-center justify-between pb-3 mb-3 border-b border-neutral-800 shrink-0 gap-2">
+                    <div class="flex space-x-2">
+                        <button onclick="switchImmersiveTab('subtitles')" id="tab-btn-subtitles" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-spotify-green text-black transition">
+                            <i class="fa-solid fa-closed-captioning mr-1"></i> Subtitles
+                        </button>
+                        <button onclick="switchImmersiveTab('queue')" id="tab-btn-queue" class="px-3 py-1.5 rounded-lg text-xs font-medium text-spotify-muted hover:text-white transition">
+                            <i class="fa-solid fa-list mr-1"></i> Queue
+                        </button>
+                    </div>
+                    <!-- Subtitle Timing Offset Adjuster -->
+                    <div class="flex items-center space-x-1.5 text-xs text-spotify-muted bg-neutral-950 px-2 py-1 rounded-lg border border-neutral-800" title="Adjust Subtitle Timing (fixes intro silences)">
+                        <span>Offset:</span>
+                        <button onclick="adjustSubtitleOffset(-1)" class="px-1.5 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded text-white font-mono">-1s</button>
+                        <span id="subtitle-offset-display" class="font-mono text-spotify-green px-1">0s</span>
+                        <button onclick="adjustSubtitleOffset(1)" class="px-1.5 py-0.5 bg-neutral-800 hover:bg-neutral-700 rounded text-white font-mono">+1s</button>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Subtitles (Fullscreen Mode) -->
+                <div id="immersive-subtitles-panel" class="flex-1 overflow-y-auto space-y-4 pr-2 text-center py-6">
+                    <div class="text-spotify-muted text-xs italic py-20" id="subtitles-status-msg">Finding subtitles...</div>
+                </div>
+
+                <!-- Tab Content: Queue Overview -->
+                <div id="immersive-queue-panel" class="flex-1 overflow-y-auto space-y-2 pr-1 hidden">
+                    <div id="immersive-queue-list" class="space-y-2">
+                        <!-- Dynamic queue items -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Body -->
+    <div class="flex flex-1 overflow-hidden p-2 gap-2 relative">
+        <!-- Sidebar -->
+        <aside id="app-sidebar" class="fixed md:static inset-y-0 left-0 md:inset-auto z-50 w-72 md:w-64 bg-spotify-lightdark transform -translate-x-full md:translate-x-0 transition-transform duration-300 flex flex-col p-4 space-y-4 shrink-0 shadow-2xl md:shadow-none">
+            <div class="flex items-center justify-between px-2 py-1">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 rounded-full bg-spotify-green flex items-center justify-center text-black font-bold text-lg">
+                        <i class="fa-solid fa-headphones"></i>
+                    </div>
+                    <span class="font-bold text-lg tracking-tight">Music4Free</span>
+                </div>
+                <button onclick="toggleMobileSidebar(false)" class="md:hidden text-spotify-muted hover:text-white text-lg p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <nav class="space-y-1">
+                <button onclick="switchView('home')" id="nav-home" class="w-full flex items-center space-x-4 px-3 py-2.5 rounded-lg text-sm font-semibold text-white bg-neutral-800 transition">
+                    <i class="fa-solid fa-house w-5 text-center text-lg"></i>
+                    <span>Home</span>
+                </button>
+                <button onclick="switchView('favorites')" id="nav-favorites" class="w-full flex items-center space-x-4 px-3 py-2.5 rounded-lg text-sm font-medium text-spotify-muted hover:text-white hover:bg-neutral-800/50 transition">
+                    <i class="fa-solid fa-heart w-5 text-center text-lg text-rose-500"></i>
+                    <span>Liked Songs</span>
+                </button>
+            </nav>
+
+            <hr class="border-neutral-800 my-1">
+
+            <div class="flex items-center justify-between px-2 text-spotify-muted text-xs font-semibold uppercase tracking-wider">
+                <span>Playlists</span>
+                <button onclick="togglePlaylistModal(true)" class="hover:text-white transition"><i class="fa-solid fa-plus text-sm"></i></button>
+            </div>
+
+            <div id="sidebar-playlists" class="flex-1 overflow-y-auto space-y-1 pr-1">
+            </div>
+
+            <div class="pt-2 border-t border-neutral-800 space-y-1">
+                <button onclick="exportData()" class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs text-spotify-muted hover:text-white hover:bg-neutral-800 transition">
+                    <i class="fa-solid fa-download w-4 text-center"></i>
+                    <span>Export Data (JSON)</span>
+                </button>
+                <label class="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-xs text-spotify-muted hover:text-white hover:bg-neutral-800 transition cursor-pointer">
+                    <i class="fa-solid fa-upload w-4 text-center"></i>
+                    <span>Import Data</span>
+                    <input type="file" id="import-file" accept=".json" onchange="importData(event)" class="hidden">
+                </label>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main id="l">(optional)</span></label>
                     <input type="text" id="new-playlist-url" placeholder="https://www.youtube.com/playlist?list=..." class="w-full bg-black/50 border border-neutral-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-spotify-green text-white">
                 </div>
             </div>
