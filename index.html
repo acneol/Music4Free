@@ -40,7 +40,7 @@
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
 
-        // IndexedDB Helper Functions with Self-Healing Store Verification
+        // IndexedDB Helper Functions with Self-Healing Store Verification & Quota Safety
         const DB_NAME = 'Music4FreeDB';
         const DB_VERSION = 5;
 
@@ -61,7 +61,6 @@
 
                 request.onsuccess = () => {
                     const db = request.result;
-                    // Self-healing check: if object stores are missing, wipe and recreate DB
                     if (!db.objectStoreNames.contains('blobs') || !db.objectStoreNames.contains('state')) {
                         db.close();
                         const deleteReq = indexedDB.deleteDatabase(DB_NAME);
@@ -69,7 +68,6 @@
                             const retryReq = indexedDB.open(DB_NAME, DB_VERSION + 1);
                             retryReq.onerror = () => reject(retryReq.error);
                             
-                            // Attach upgradeneeded BEFORE opening retryReq
                             retryReq.onupgradeneeded = (e) => {
                                 const newDb = e.target.result;
                                 if (!newDb.objectStoreNames.contains('blobs')) newDb.createObjectStore('blobs');
@@ -107,10 +105,21 @@
         async function saveBlobToDB(fileKey, blob) {
             try {
                 const db = await openDB();
-                const tx = db.transaction('blobs', 'readwrite');
-                tx.objectStore('blobs').put(blob, fileKey);
+                return new Promise((resolve, reject) => {
+                    const tx = db.transaction('blobs', 'readwrite');
+                    const store = tx.objectStore('blobs');
+                    const req = store.put(blob, fileKey);
+                    req.onsuccess = () => resolve(true);
+                    req.onerror = () => {
+                        if (req.error && req.error.name === 'QuotaExceededError') {
+                            reject(new Error("StorageQuotaExceeded"));
+                        } else {
+                            reject(req.error);
+                        }
+                    };
+                });
             } catch (e) {
-                console.error("Error saving blob to IndexedDB:", e);
+                throw e;
             }
         }
 
@@ -152,7 +161,11 @@
 
                                         let url = "";
                                         if (blob) {
-                                            url = URL.createObjectURL(blob);
+                                            try {
+                                                url = URL.createObjectURL(blob);
+                                            } catch (err) {
+                                                console.error("Failed to create object URL for blob:", err);
+                                            }
                                         }
 
                                         restoredSongs.push({
@@ -328,6 +341,7 @@
             const [editedPlaylistName, setEditedPlaylistName] = useState('');
             const [pendingDeletedSongIds, setPendingDeletedSongIds] = useState([]);
             const [showSongDeleteConfirm, setShowSongDeleteConfirm] = useState(false);
+            const [uploadProgress, setUploadProgress] = useState(null);
 
             const [draggedSongIndex, setDraggedSongIndex] = useState(null);
             const [dragOverSongIndex, setDragOverSongIndex] = useState(null);
@@ -343,6 +357,31 @@
             const audioRef = useRef(null);
             const activePlaylist = playlists.find(p => p.id === activePlaylistId) || playlists[0];
 
+            // Request permanent storage persistence & check quota on mount
+            useEffect(() => {
+                if (navigator.storage && navigator.storage.persist) {
+                    navigator.storage.persist().then(granted => {
+                        if (granted) {
+                            console.log("Storage persistence successfully granted.");
+                        } else {
+                            console.log("Storage persistence was not granted.");
+                        }
+                    });
+                }
+
+                if (navigator.storage && navigator.storage.estimate) {
+                    navigator.storage.estimate().then(estimate => {
+                        const usedMB = Math.round(estimate.usage / (1024 * 1024));
+                        const quotaMB = Math.round(estimate.quota / (1024 * 1024));
+                        const percent = ((estimate.usage / estimate.quota) * 100).toFixed(1);
+                        console.log(`Storage: ${usedMB}MB / ${quotaMB}MB (${percent}%)`);
+                        if (percent > 85) {
+                            showToast(`Warning: Storage is at ${percent}%. Consider exporting a backup ZIP.`);
+                        }
+                    });
+                }
+            }, []);
+
             // Reset edit mode when changing active playlist
             useEffect(() => {
                 setIsEditingPlaylist(false);
@@ -356,7 +395,6 @@
                     if (!finalPlaylists || finalPlaylists.length === 0) {
                         finalPlaylists = DEFAULT_PLAYLISTS;
                     } else {
-                        // Ensure both system playlists exist
                         if (!finalPlaylists.some(p => p.id === 'recently-added')) {
                             finalPlaylists.unshift({ id: 'recently-added', name: 'Recently Added', isSystem: true, songs: [] });
                         }
@@ -425,7 +463,7 @@
 
             const showToast = (msg) => {
                 setToastMessage(msg);
-                setTimeout(() => setToastMessage(null), 3000);
+                setTimeout(() => setToastMessage(null), 3500);
             };
 
             const handleCopy = (text) => {
@@ -484,68 +522,87 @@
                 setIsPlaying(true);
             };
 
-            const handleFileUpload = (e, targetPlaylistId) => {
+            // Chunked bulk upload handler to prevent memory overload & IDB race conditions
+            const handleFileUpload = async (e, targetPlaylistId) => {
                 const files = Array.from(e.target.files);
                 if (files.length === 0) return;
 
-                files.forEach((file, index) => {
-                    const fileKey = `${Date.now()}-${index}-${Math.random()}`;
-                    saveBlobToDB(fileKey, file);
+                const batchSize = 5; // process in chunks of 5 for safety and stability
+                let successCount = 0;
 
-                    const fileUrl = URL.createObjectURL(file);
-                    const defaultName = file.name.replace(/\.[^/.]+$/, "");
-                    const nameParts = defaultName.split("-");
-                    const artist = nameParts.length > 1 ? nameParts[0].trim() : "Unknown Artist";
-                    const title = nameParts.length > 1 ? nameParts.slice(1).join("-").trim() : nameParts[0].trim();
+                for (let i = 0; i < files.length; i += batchSize) {
+                    const chunk = files.slice(i, i + batchSize);
+                    setUploadProgress(`Processing songs ${i + 1} to ${Math.min(i + batchSize, files.length)} of ${files.length}...`);
 
-                    const newSongObj = {
-                        id: fileKey,
-                        fileKey,
-                        title,
-                        artist,
-                        url: fileUrl,
-                        cover: null,
-                        fileName: file.name
-                    };
-
-                    if (window.jsmediatags) {
-                        window.jsmediatags.read(file, {
-                            onSuccess: async (tag) => {
-                                let coverFound = false;
-                                const picture = tag.tags.picture;
-                                if (picture) {
-                                    let base64String = "";
-                                    for (let i = 0; i < picture.data.length; i++) {
-                                        base64String += String.fromCharCode(picture.data[i]);
-                                    }
-                                    newSongObj.cover = `data:${picture.format};base64,${window.btoa(base64String)}`;
-                                    coverFound = true;
-                                }
-                                if (tag.tags.title) newSongObj.title = tag.tags.title;
-                                if (tag.tags.artist) newSongObj.artist = tag.tags.artist;
-
-                                if (!coverFound) {
-                                    const apiCover = await fetchAlbumArtFromAPI(newSongObj.artist, newSongObj.title);
-                                    if (apiCover) {
-                                        newSongObj.cover = apiCover;
-                                    }
-                                }
-
-                                addSongToLibraryAndPlaylists(targetPlaylistId, newSongObj);
-                            },
-                            onError: async () => {
-                                const apiCover = await fetchAlbumArtFromAPI(newSongObj.artist, newSongObj.title);
-                                if (apiCover) {
-                                    newSongObj.cover = apiCover;
-                                }
-                                addSongToLibraryAndPlaylists(targetPlaylistId, newSongObj);
+                    await Promise.all(chunk.map(async (file, indexInChunk) => {
+                        const fileKey = `${Date.now()}-${i + indexInChunk}-${Math.random()}`;
+                        try {
+                            await saveBlobToDB(fileKey, file);
+                        } catch (err) {
+                            if (err.message === "StorageQuotaExceeded") {
+                                alert("Storage Quota Exceeded! Your device storage is full. Please export a backup ZIP immediately.");
+                            } else {
+                                console.error("Blob save error:", err);
                             }
-                        });
-                    } else {
+                            return;
+                        }
+
+                        const fileUrl = URL.createObjectURL(file);
+                        const defaultName = file.name.replace(/\.[^/.]+$/, "");
+                        const nameParts = defaultName.split("-");
+                        const artist = nameParts.length > 1 ? nameParts[0].trim() : "Unknown Artist";
+                        const title = nameParts.length > 1 ? nameParts.slice(1).join("-").trim() : nameParts[0].trim();
+
+                        const newSongObj = {
+                            id: fileKey,
+                            fileKey,
+                            title,
+                            artist,
+                            url: fileUrl,
+                            cover: null,
+                            fileName: file.name
+                        };
+
+                        if (window.jsmediatags) {
+                            await new Promise((resolve) => {
+                                window.jsmediatags.read(file, {
+                                    onSuccess: async (tag) => {
+                                        let coverFound = false;
+                                        const picture = tag.tags.picture;
+                                        if (picture) {
+                                            let base64String = "";
+                                            for (let j = 0; j < picture.data.length; j++) {
+                                                base64String += String.fromCharCode(picture.data[j]);
+                                            }
+                                            newSongObj.cover = `data:${picture.format};base64,${window.btoa(base64String)}`;
+                                            coverFound = true;
+                                        }
+                                        if (tag.tags.title) newSongObj.title = tag.tags.title;
+                                        if (tag.tags.artist) newSongObj.artist = tag.tags.artist;
+
+                                        if (!coverFound) {
+                                            const apiCover = await fetchAlbumArtFromAPI(newSongObj.artist, newSongObj.title);
+                                            if (apiCover) newSongObj.cover = apiCover;
+                                        }
+                                        resolve();
+                                    },
+                                    onError: async () => {
+                                        const apiCover = await fetchAlbumArtFromAPI(newSongObj.artist, newSongObj.title);
+                                        if (apiCover) newSongObj.cover = apiCover;
+                                        resolve();
+                                    }
+                                });
+                            });
+                        }
+
                         addSongToLibraryAndPlaylists(targetPlaylistId, newSongObj);
-                    }
-                });
-                showToast("Tracks added successfully!");
+                        successCount++;
+                    }));
+                }
+
+                setUploadProgress(null);
+                showToast(`Successfully added ${successCount} tracks!`);
+                e.target.value = "";
             };
 
             const addSongToLibraryAndPlaylists = (targetPlaylistId, song) => {
@@ -670,7 +727,7 @@
                     }
 
                     const metadata = {
-                        version: "3.2",
+                        version: "3.3",
                         exportDate: new Date().toISOString(),
                         playlists: exportedPlaylists
                     };
@@ -791,11 +848,11 @@
                             />
                         )}
 
-                        {/* TOAST NOTIFICATION */}
-                        {toastMessage && (
-                            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50">
-                                <div className="bg-purple-600/95 backdrop-blur-md text-white text-xs font-semibold px-4 py-2 rounded-full shadow-2xl border border-purple-400/30 transition animate-bounce">
-                                    {toastMessage}
+                        {/* TOAST / UPLOAD PROGRESS NOTIFICATION */}
+                        {(toastMessage || uploadProgress) && (
+                            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-xs text-center">
+                                <div className="bg-purple-600/95 backdrop-blur-md text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-2xl border border-purple-400/30 transition animate-bounce">
+                                    {uploadProgress || toastMessage}
                                 </div>
                             </div>
                         )}
@@ -990,7 +1047,6 @@
                                                 </div>
 
                                                 <div className="flex items-center space-x-3 flex-shrink-0 ml-2">
-                                                    {/* Mark for deletion or Undo deletion in edit mode */}
                                                     {isEditingPlaylist && (activePlaylist.id === 'all-songs' || !activePlaylist.isSystem) && (
                                                         <button 
                                                             onClick={(e) => {
