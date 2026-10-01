@@ -42,7 +42,7 @@
 
         // IndexedDB Helper Functions for Local Persistence
         const DB_NAME = 'Music4FreeDB';
-        const DB_VERSION = 1;
+        const DB_VERSION = 2; // Bumped to version 2 to ensure object stores are created on existing DBs
 
         function openDB() {
             return new Promise((resolve, reject) => {
