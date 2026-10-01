@@ -336,6 +336,11 @@
             const [currentTime, setCurrentTime] = useState(0);
             const [duration, setDuration] = useState(0);
 
+            // Screensaver & Wake Lock states
+            const [isScreensaverActive, setIsScreensaverActive] = useState(false);
+            const wakeLockRef = useRef(null);
+            const inactivityTimerRef = useRef(null);
+
             // Playlist editing state & pending song deletions
             const [isEditingPlaylist, setIsEditingPlaylist] = useState(false);
             const [editedPlaylistName, setEditedPlaylistName] = useState('');
@@ -356,6 +361,69 @@
 
             const audioRef = useRef(null);
             const activePlaylist = playlists.find(p => p.id === activePlaylistId) || playlists[0];
+
+            // Request Screen Wake Lock when music is playing to prevent phone from turning off
+            useEffect(() => {
+                const requestWakeLock = async () => {
+                    if ('wakeLock' in navigator && isPlaying) {
+                        try {
+                            wakeLockRef.current = await navigator.wakeLock.request('screen');
+                        } catch (err) {
+                            console.error("Wake Lock error:", err);
+                        }
+                    }
+                };
+
+                if (isPlaying) {
+                    requestWakeLock();
+                } else {
+                    if (wakeLockRef.current) {
+                        wakeLockRef.current.release().catch(() => {});
+                        wakeLockRef.current = null;
+                    }
+                }
+
+                const handleVisibilityChange = async () => {
+                    if (document.visibilityState === 'visible' && isPlaying && 'wakeLock' in navigator) {
+                        try {
+                            wakeLockRef.current = await navigator.wakeLock.request('screen');
+                        } catch (err) {
+                            console.error("Wake Lock re-acquire error:", err);
+                        }
+                    }
+                };
+
+                document.addEventListener('visibilitychange', handleVisibilityChange);
+                return () => {
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+                    if (wakeLockRef.current) {
+                        wakeLockRef.current.release().catch(() => {});
+                    }
+                };
+            }, [isPlaying]);
+
+            // Inactivity timer to automatically launch the screensaver mode
+            useEffect(() => {
+                const resetInactivityTimer = () => {
+                    if (isScreensaverActive) setIsScreensaverActive(false);
+                    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+                    
+                    if (isPlaying) {
+                        inactivityTimerRef.current = setTimeout(() => {
+                            setIsScreensaverActive(true);
+                        }, 60000); // Triggers screensaver after 1 minute of inactivity
+                    }
+                };
+
+                const events = ['mousemove', 'mousedown', 'touchstart', 'keydown', 'scroll'];
+                events.forEach(event => window.addEventListener(event, resetInactivityTimer));
+                resetInactivityTimer();
+
+                return () => {
+                    events.forEach(event => window.removeEventListener(event, resetInactivityTimer));
+                    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+                };
+            }, [isPlaying, isScreensaverActive]);
 
             // Request permanent storage persistence & check quota on mount
             useEffect(() => {
@@ -527,7 +595,7 @@
                 const files = Array.from(e.target.files);
                 if (files.length === 0) return;
 
-                const batchSize = 5; // process in chunks of 5 for safety and stability
+                const batchSize = 5;
                 let successCount = 0;
 
                 for (let i = 0; i < files.length; i += batchSize) {
@@ -848,9 +916,38 @@
                             />
                         )}
 
+                        {/* SCREENSAVER OVERLAY */}
+                        {isScreensaverActive && currentSong && (
+                            <div 
+                                onClick={() => setIsScreensaverActive(false)}
+                                className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center p-8 select-none cursor-pointer animate-fadeIn"
+                            >
+                                <div className="absolute top-8 text-purple-400/60 text-sm font-mono tracking-widest">
+                                    {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                <div className="w-64 h-64 rounded-[36px] overflow-hidden shadow-[0_0_80px_rgba(168,85,247,0.25)] border border-white/10 mb-8 relative animate-pulse flex items-center justify-center bg-[#181622]">
+                                    {currentSong.cover ? (
+                                        <img src={currentSong.cover} alt="" className="w-full h-full object-cover opacity-90" />
+                                    ) : (
+                                        <div className="text-purple-300/40"><IconSolKey size={80} /></div>
+                                    )}
+                                </div>
+                                <div className="text-center space-y-2 max-w-xs">
+                                    <h2 className="text-xl font-black text-white truncate">{currentSong.title}</h2>
+                                    <p className="text-sm text-purple-300/60 truncate">{currentSong.artist}</p>
+                                </div>
+                                <div className="mt-10">
+                                    <SoundWave isPlaying={isPlaying} />
+                                </div>
+                                <div className="absolute bottom-8 text-[11px] text-purple-400/40 tracking-wider">
+                                    Tap anywhere to exit screensaver
+                                </div>
+                            </div>
+                        )}
+
                         {/* TOAST / UPLOAD PROGRESS NOTIFICATION */}
                         {(toastMessage || uploadProgress) && (
-                            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 w-11/12 max-w-xs text-center">
+                            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 w-11/12 max-w-xs text-center">
                                 <div className="bg-purple-600/95 backdrop-blur-md text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-2xl border border-purple-400/30 transition animate-bounce">
                                     {uploadProgress || toastMessage}
                                 </div>
@@ -1561,6 +1658,7 @@
                                                     }
                                                 }
 
+                                                setShowSongDeleteConstant = false;
                                                 setShowSongDeleteConfirm(false);
                                                 setPendingDeletedSongIds([]);
                                                 setIsEditingPlaylist(false);
