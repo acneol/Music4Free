@@ -42,12 +42,23 @@
 
         // IndexedDB Helper Functions with Self-Healing Store Verification
         const DB_NAME = 'Music4FreeDB';
-        const DB_VERSION = 4;
+        const DB_VERSION = 5;
 
         function openDB() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open(DB_NAME, DB_VERSION);
                 request.onerror = () => reject(request.error);
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('blobs')) {
+                        db.createObjectStore('blobs');
+                    }
+                    if (!db.objectStoreNames.contains('state')) {
+                        db.createObjectStore('state');
+                    }
+                };
+
                 request.onsuccess = () => {
                     const db = request.result;
                     // Self-healing check: if object stores are missing, wipe and recreate DB
@@ -55,27 +66,21 @@
                         db.close();
                         const deleteReq = indexedDB.deleteDatabase(DB_NAME);
                         deleteReq.onsuccess = () => {
-                            const retryReq = indexedDB.open(DB_NAME, DB_VERSION);
+                            const retryReq = indexedDB.open(DB_NAME, DB_VERSION + 1);
                             retryReq.onerror = () => reject(retryReq.error);
-                            retryReq.onsuccess = () => resolve(retryReq.result);
-                            retryReq.upgradeneeded = (e) => {
+                            
+                            // Attach upgradeneeded BEFORE opening retryReq
+                            retryReq.onupgradeneeded = (e) => {
                                 const newDb = e.target.result;
                                 if (!newDb.objectStoreNames.contains('blobs')) newDb.createObjectStore('blobs');
                                 if (!newDb.objectStoreNames.contains('state')) newDb.createObjectStore('state');
                             };
+                            
+                            retryReq.onsuccess = (e) => resolve(e.target.result);
                         };
                         deleteReq.onerror = () => reject(new Error("Failed to reset IndexedDB"));
                     } else {
                         resolve(db);
-                    }
-                };
-                request.upgradeneeded = (event) => {
-                    const db = event.target.result;
-                    if (!db.objectStoreNames.contains('blobs')) {
-                        db.createObjectStore('blobs');
-                    }
-                    if (!db.objectStoreNames.contains('state')) {
-                        db.createObjectStore('state');
                     }
                 };
             });
