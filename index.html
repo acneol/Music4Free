@@ -120,51 +120,73 @@
                 return new Promise((resolve, reject) => {
                     const tx = db.transaction(['blobs', 'state'], 'readonly');
                     const stateStore = tx.objectStore('state');
+                    const blobStore = tx.objectStore('blobs');
                     
                     const playlistsReq = stateStore.get('playlists');
                     const settingsReq = stateStore.get('settings');
 
-                    playlistsReq.onsuccess = async () => {
-                        const lightPlaylists = playlistsReq.result;
-                        const settings = settingsReq.result || {};
+                    let lightPlaylists = null;
+                    let settings = null;
+                    let completedCount = 0;
 
-                        if (!lightPlaylists) {
-                            resolve({ playlists: null, settings: null });
-                            return;
-                        }
-
-                        const blobStore = tx.objectStore('blobs');
-                        const restoredPlaylists = [];
-
-                        for (const playlist of lightPlaylists) {
-                            const restoredSongs = [];
-                            for (const song of playlist.songs) {
-                                const fileKey = song.fileKey || song.id;
-                                const blob = await new Promise((res) => {
-                                    const req = blobStore.get(fileKey);
-                                    req.onsuccess = () => res(req.result);
-                                    req.onerror = () => res(null);
-                                });
-
-                                let url = "";
-                                if (blob) {
-                                    url = URL.createObjectURL(blob);
+                    const checkDone = async () => {
+                        completedCount++;
+                        if (completedCount === 2) {
+                            try {
+                                if (!lightPlaylists) {
+                                    resolve({ playlists: null, settings: null });
+                                    return;
                                 }
 
-                                restoredSongs.push({
-                                    ...song,
-                                    fileKey,
-                                    url
-                                });
+                                const restoredPlaylists = [];
+
+                                for (const playlist of lightPlaylists) {
+                                    const restoredSongs = [];
+                                    for (const song of playlist.songs) {
+                                        const fileKey = song.fileKey || song.id;
+                                        const blob = await new Promise((res) => {
+                                            const req = blobStore.get(fileKey);
+                                            req.onsuccess = () => res(req.result);
+                                            req.onerror = () => res(null);
+                                        });
+
+                                        let url = "";
+                                        if (blob) {
+                                            url = URL.createObjectURL(blob);
+                                        }
+
+                                        restoredSongs.push({
+                                            ...song,
+                                            fileKey,
+                                            url
+                                        });
+                                    }
+                                    restoredPlaylists.push({
+                                        ...playlist,
+                                        songs: restoredSongs
+                                    });
+                                }
+                                resolve({ playlists: restoredPlaylists, settings: settings || {} });
+                            } catch (err) {
+                                reject(err);
                             }
-                            restoredPlaylists.push({
-                                ...playlist,
-                                songs: restoredSongs
-                            });
                         }
-                        resolve({ playlists: restoredPlaylists, settings });
+                    };
+
+                    playlistsReq.onsuccess = () => {
+                        lightPlaylists = playlistsReq.result;
+                        checkDone();
                     };
                     playlistsReq.onerror = () => reject(playlistsReq.error);
+
+                    settingsReq.onsuccess = () => {
+                        settings = settingsReq.result;
+                        checkDone();
+                    };
+                    settingsReq.onerror = () => {
+                        settings = {};
+                        checkDone();
+                    };
                 });
             } catch (e) {
                 console.error("Error loading state from IndexedDB:", e);
