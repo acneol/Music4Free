@@ -40,15 +40,35 @@
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
 
-        // IndexedDB Helper Functions for Local Persistence
+        // IndexedDB Helper Functions with Self-Healing Store Verification
         const DB_NAME = 'Music4FreeDB';
-        const DB_VERSION = 2; // Bumped to version 2 to ensure object stores are created on existing DBs
+        const DB_VERSION = 4;
 
         function openDB() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open(DB_NAME, DB_VERSION);
                 request.onerror = () => reject(request.error);
-                request.onsuccess = () => resolve(request.result);
+                request.onsuccess = () => {
+                    const db = request.result;
+                    // Self-healing check: if object stores are missing, wipe and recreate DB
+                    if (!db.objectStoreNames.contains('blobs') || !db.objectStoreNames.contains('state')) {
+                        db.close();
+                        const deleteReq = indexedDB.deleteDatabase(DB_NAME);
+                        deleteReq.onsuccess = () => {
+                            const retryReq = indexedDB.open(DB_NAME, DB_VERSION);
+                            retryReq.onerror = () => reject(retryReq.error);
+                            retryReq.onsuccess = () => resolve(retryReq.result);
+                            retryReq.upgradeneeded = (e) => {
+                                const newDb = e.target.result;
+                                if (!newDb.objectStoreNames.contains('blobs')) newDb.createObjectStore('blobs');
+                                if (!newDb.objectStoreNames.contains('state')) newDb.createObjectStore('state');
+                            };
+                        };
+                        deleteReq.onerror = () => reject(new Error("Failed to reset IndexedDB"));
+                    } else {
+                        resolve(db);
+                    }
+                };
                 request.upgradeneeded = (event) => {
                     const db = event.target.result;
                     if (!db.objectStoreNames.contains('blobs')) {
